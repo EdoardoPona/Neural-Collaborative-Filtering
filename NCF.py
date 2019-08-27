@@ -13,18 +13,39 @@ class NeuralCollaborativeFiltering(torch.nn.Module):
         self.gmf_user_embeddings = nn.Embedding(num_embeddings=user_num, embedding_dim=gmf_embedding_size)
         self.gmf_item_embeddings = nn.Embedding(num_embeddings=item_num, embedding_dim=gmf_embedding_size)
 
-        self.mlp = nn.Sequential([nn.Linear(mlp_embedding_size, mlp_hidden_size), nn.ReLU(),
+        # TODO the paper uses a tower structure, halving the layer size each time
+        self.mlp = nn.Sequential(nn.Linear(mlp_embedding_size, mlp_hidden_size), nn.ReLU(),
                                   nn.Linear(mlp_hidden_size, mlp_hidden_size), nn.ReLU(),
-                                  nn.Linear(mlp_hidden_size, mlp_hidden_size), nn.Sigmoid()])
+                                  nn.Linear(mlp_hidden_size, mlp_hidden_size), nn.ReLU())
 
-        self.output_logits = nn.Linear(mlp_hidden_size + gmf_embedding_size, 1)
+        self.gmf_out = nn.Linear(gmf_embedding_size, 1, bias=False)
+        self.mlp_out = nn.Linear(mlp_hidden_size, 1, bias=False)
 
-    def forward(self, user_id, item_id):
+        self.output_logits = nn.Linear(mlp_hidden_size + gmf_embedding_size, 1, bias=False)
+        self.model_blending = 0.5           # alpha parameter, equation 13 in the paper
+
+    def forward(self, user_id, item_id, mode='ncf'):
+
+        if mode == 'ncf':
+            gmf_product = self.gmf_forward(user_id, item_id)
+            mlp_output = self.mlp_out(user_id, item_id)
+            return torch.sigmoid(self.output_logits(torch.cat([gmf_product, mlp_output])))
+        elif mode == 'mlp':
+            return torch.sigmoid(self.mlp_out(self.mlp_forward(user_id, item_id)))
+        elif mode == 'gmf':
+            return torch.sigmoid(self.gmf_out(self.gmf_forward(user_id, item_id)))
+
+    def gmf_forward(self, user_id, item_id):
+        user_emb = self.gmf_user_embeddings(user_id)
+        item_emb = self.gmf_item_embeddings(item_id)
+        return torch.mul(user_emb, item_emb)
+
+    def mlp_forward(self, user_id, item_id):
         user_emb = self.mlp_user_embeddings(user_id)
         item_emb = self.mlp_item_embeddings(item_id)
+        return self.mlp(torch.cat([user_emb, item_emb], dim=1))
 
-        mlp_output = self.mlp(torch.cat([user_emb, item_emb], dim=1))
-        mf_outpt = torch.mul(self.gmf_user_embeddingsf(user_id), self.gmf_item_embeddings(item_id))
-
-        out = torch.sigmoid(self.output_logits(torch.cat([mlp_output, mf_outpt])))
-        return out
+    def join_output_weights(self):
+        """ join the last layer after pretraining """
+        self.output_logits.weight = torch.cat((self.model_blending*self.gmf_out.weight,
+                                               (1-self.model_blending)*self.mlp_out.weight), dim=0)
