@@ -89,11 +89,12 @@ ncf = NCF.NeuralCollaborativeFiltering(len(all_users)+1, len(all_books)+1, 100, 
 mlp_optimizer = optim.Adam(list(ncf.mlp_item_embeddings.parameters()) +
                         list(ncf.mlp_user_embeddings.parameters()) +
                         list(ncf.mlp.parameters()) +
-                        list(ncf.mlp_out.parameters()), lr=1e-4)
+                        list(ncf.mlp_out.parameters()), lr=1e-3)
 gmf_optimizer = optim.Adam(list(ncf.gmf_item_embeddings.parameters()) +
                         list(ncf.gmf_user_embeddings.parameters()) +
-                        list(ncf.gmf_out.parameters()), lr=1e-4)
+                        list(ncf.gmf_out.parameters()), lr=1e-3)
 ncf_optimizer = optim.SGD(ncf.parameters(), lr=1e-4)
+
 
 print('\nTraining MLP')
 train('mlp', mlp_optimizer)
