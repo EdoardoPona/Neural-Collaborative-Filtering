@@ -40,6 +40,7 @@ def build_dictionaries():
 
 
 user_to_books, book_to_users = build_dictionaries()
+
 all_users = list(user_to_books.keys())
 all_books = list(book_to_users.keys())
 
@@ -56,29 +57,51 @@ def get_neg_user_books():
     user = random.choice(all_users)
     while user in list(book_to_users[book].keys()):
         user = random.choice(all_users)
-    return [int(book), int(user)]
+    return [int(user), int(book)]
 
 
 def get_batch(size=50):
-    pos_num = int(2/5*size)         # TODO justify/change this number
+    pos_num = int(1/4*size)         # 3 <= neg:pos <= 6  as described by section 4.3 in paper
     i = random.randint(0, len(all_books)-pos_num-1)
     pos = pos_user_books[i:i+pos_num]
     neg_num = size - pos_num
     neg = [get_neg_user_books() for i in range(neg_num)]
     target = torch.cat((torch.ones(pos_num, 1), torch.zeros(neg_num, 1)), dim=0)
-    return torch.Tensor(pos+neg), target
-
-def pretrain_gmf():
-    # train only gmf, use early stopping with Adam
-    pass
-
-def pretrain_mlp():
-    # train only mlp, use early stopping with Adam
-    pass
+    return torch.Tensor(pos+neg).long().cuda(), target.cuda()
 
 
-def train():
-    pretrain_gmf()
-    pretrain_mlp()
-    # join output layer weights
-    # train the whole model with SGD
+def train(mode, optimizer):
+    # TODO use early stopping
+    for i in range(int(1e4)):
+        x, y = get_batch()
+        y_ = ncf(x, mode=mode)
+        loss = F.binary_cross_entropy(y_, y)
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        if i % 100 == 0:
+            print('step', i, 'loss', loss.item())
+
+
+ncf = NCF.NeuralCollaborativeFiltering(len(all_users)+1, len(all_books)+1, 100, 100, 128).cuda()
+
+mlp_optimizer = optim.Adam(list(ncf.mlp_item_embeddings.parameters()) +
+                        list(ncf.mlp_user_embeddings.parameters()) +
+                        list(ncf.mlp.parameters()) +
+                        list(ncf.mlp_out.parameters()), lr=1e-4)
+gmf_optimizer = optim.Adam(list(ncf.gmf_item_embeddings.parameters()) +
+                        list(ncf.gmf_user_embeddings.parameters()) +
+                        list(ncf.gmf_out.parameters()), lr=1e-4)
+ncf_optimizer = optim.SGD(ncf.parameters(), lr=1e-4)
+
+print('\nTraining MLP')
+train('mlp', mlp_optimizer)
+
+print('\nTrainging GMF')
+train('gmf', gmf_optimizer)
+
+ncf.join_output_weights()
+
+print('\nTraining NCF')
+train('ncf', ncf_optimizer)
