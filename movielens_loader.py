@@ -1,9 +1,10 @@
+import copy
 
 class MovielensDatasetLoader:
     def __init__(self, filename='ml-1m/ratings.dat'):
         self.ratings = open(filename, 'r').readlines()
         self.user_num, self.item_num = 6040, 3952        # as specified by the README
-        # strangely only user corresponds to the length of the dictionary some items are missing
+        # strangely only user corresponds to the length of the dictionary, some items are missing
 
     def build_dictionaries(self):
         ratings = open('ml-1m/ratings.dat', 'r').readlines()
@@ -27,11 +28,25 @@ class MovielensDatasetLoader:
             else:
                 movie_to_user[movie_id] = {user_id: rating}
 
-        user_num = len(user_to_movie.keys())
-        movie_num = len(movie_to_user.keys())
+        print(self.user_num, 'users', self.item_num, 'movies')
+        self.user_to_movie = user_to_movie
+        self.movie_to_user = movie_to_user
 
-        print(user_num, 'users', movie_num, 'movies')
-        return user_to_movie, movie_to_user
+        self._build_test_set()
+        return self.get_dictionaries()
 
-user_num, item_num = 6040, 3952           # as specified by the README   strangely only uesr_num corresponds to the length of the dictionary
-                                    # some items are missing
+    def get_dictionaries(self):
+        return copy.deepcopy(self.user_to_movie),\
+               copy.deepcopy(self.movie_to_user), \
+               copy.deepcopy(self.test_user_to_movie)
+
+    def _build_test_set(self):
+        test_user_to_movie = {}
+        for user in list(self.user_to_movie.keys()):
+            # TODO at the moment last_item_key doesn't care about the actual rating
+            last_item_key = list(self.user_to_movie[user].keys())[-1]
+            test_user_to_movie[user] = last_item_key
+            del self.user_to_movie[user][last_item_key]
+            del self.movie_to_user[last_item_key][user]
+
+        self.test_user_to_movie = test_user_to_movie
