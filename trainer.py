@@ -88,7 +88,7 @@ def train(mode, optimizer, epochs=10, batch_size=128):
             user2items, item2users, test_user2items = dataset_loader.get_dictionaries()
 
 
-            ncf = NCF.NeuralCollaborativeFiltering(user_num+1, item_num+1, 16).cuda()
+ncf = NCF.NeuralCollaborativeFiltering(user_num+1, item_num+1, 16).cuda()
 ncf.join_output_weights()
 print('Hit ratio:', HitRatio())
 
