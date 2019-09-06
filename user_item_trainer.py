@@ -87,6 +87,9 @@ def train(mode, optimizer, epochs=10, batch_size=128):
             # user2items, item2users = dataset_loader.build_dictionaries()
             user2items, item2users, test_user2items = dataset_loader.get_dictionaries()
 
+# TODO          INVESTIGATE
+# TODO once it has stopped in the middle of training... not sure what caused that. Might be something related to the random picking of items
+# TODO perhaps it leaves a user with not enough items to complete a batch, maybe it is in get_neg, the while loop
 
 ncf = NCF.NeuralCollaborativeFiltering(user_num+1, item_num+1, 16).cuda()
 ncf.join_output_weights()
