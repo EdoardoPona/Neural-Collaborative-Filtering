@@ -7,11 +7,16 @@ import random
 import time
 import movielens_loader
 import numpy as np
-
+import copy
 
 dataset_loader = movielens_loader.MovielensDatasetLoader(mode='item_item')
 
 user2items, item2users, test_item_pair = dataset_loader.build_dictionaries()
+
+# used for picking the negative pairs, users should not be removed from here
+all_users = copy.deepcopy(list(user2items.keys()))
+all_user2items = copy.deepcopy(user2items)
+
 user_num, item_num = dataset_loader.user_num, dataset_loader.item_num
 
 
@@ -39,11 +44,11 @@ def get_pos_pair():
 def get_neg_pair():
     item0 = random.choice(list(item2users.keys()))      # first item randomly picked
     # the user of the second item should not have rated the first item, so it should not be in item2users[item0]
-    item1_user = random.choice(list(user2items.keys()))     # random out of all users
+    item1_user = random.choice(all_users)     # random out of all users
     while item1_user in list(item2users[item0].keys()):         # the random user has rated item0
-        item1_user = random.choice(list(user2items.keys()))  # pick another one
+        item1_user = random.choice(all_users)  # pick another one
 
-    item1 = random.choice(list(user2items[item1_user].keys()))      # pick random item out of the ones rated by item1_user
+    item1 = random.choice(list(all_user2items[item1_user].keys()))      # pick random item out of the ones rated by item1_user
     return [int(item0), int(item1)]
 
 
@@ -55,7 +60,7 @@ def get_batch(size=128):
     return torch.Tensor(pos+neg).long().cuda(), target.cuda()
 
 
-def HitRatio(test_num=100):
+def HitRatio(test_num=200):
     global test_item_pair
     hits = 0
     test_users = list(test_item_pair.keys())[:test_num]
@@ -87,7 +92,7 @@ def train(mode, optimizer, epochs=10, batch_size=128):
         optimizer.step()
         optimizer.zero_grad()
 
-        if i % 100 == 0:
+        if i % 400 == 0:
             print('epoch', ep, 'step', i, 'loss', loss.item())
         i += 1
 
