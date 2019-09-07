@@ -7,11 +7,12 @@ import random
 import time
 import movielens_loader
 import numpy as np
-
+import copy
 
 dataset_loader = movielens_loader.MovielensDatasetLoader()
 
 user2items, item2users, test_user2items = dataset_loader.build_dictionaries()
+all_users = copy.deepcopy(list(user2items.keys()))          # used for picking the negative pairs, users should not be removed from here
 user_num, item_num = dataset_loader.user_num, dataset_loader.item_num
 
 
@@ -28,10 +29,18 @@ def get_pos_user():
 
 
 def get_neg_user():
+    # the choice of user is limited as they get removed from user2items, but not from item2users
     item = random.choice(list(item2users.keys()))
-    user = random.choice(list(user2items.keys()))
+    # user = random.choice(list(user2items.keys()))
+    user = random.choice(all_users)
+    i = 0
     while user in list(item2users[item].keys()):
-        user = random.choice(list(user2items.keys()))
+        i += 1
+        user = random.choice(all_users)
+        if i > 30:
+            print("all users", len(list(user2items.keys())))
+            print("item users", len(list(item2users[item].keys())))
+
     return [int(user), int(item)]
 
 
@@ -43,7 +52,7 @@ def get_batch(size=128):
     return torch.Tensor(pos+neg).long().cuda(), target.cuda()
 
 
-def HitRatio(test_num=100):
+def HitRatio(test_num=200):
     global test_user2items
     hits = 0
     test_users = list(test_user2items.keys())[:test_num]
@@ -68,14 +77,14 @@ def train(mode, optimizer, epochs=10, batch_size=128):
     ep = 0
     i = 0
     while ep < epochs:
-        x, y = get_batch(128)
+        x, y = get_batch(batch_size)
         y_ = ncf(x, mode=mode)
         loss = F.binary_cross_entropy(y_, y)
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
 
-        if i % 100 == 0:
+        if i % 400 == 0:
             print('epoch', ep, 'step', i, 'loss', loss.item())
         i += 1
 
@@ -87,11 +96,8 @@ def train(mode, optimizer, epochs=10, batch_size=128):
             # user2items, item2users = dataset_loader.build_dictionaries()
             user2items, item2users, test_user2items = dataset_loader.get_dictionaries()
 
-# TODO          INVESTIGATE
-# TODO once it has stopped in the middle of training... not sure what caused that. Might be something related to the random picking of items
-# TODO perhaps it leaves a user with not enough items to complete a batch, maybe it is in get_neg, the while loop
 
-ncf = NCF.NeuralCollaborativeFiltering(user_num+1, item_num+1, 16).cuda()
+ncf = NCF.NeuralCollaborativeFiltering(user_num+1, item_num+1, 32).cuda()
 ncf.join_output_weights()
 print('Hit ratio:', HitRatio())
 
